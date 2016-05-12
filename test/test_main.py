@@ -1,6 +1,4 @@
-import random
-
-from unittest.mock import Mock
+from unittest.mock import Mock, PropertyMock
 
 import vacuum_world
 
@@ -18,42 +16,28 @@ def test_run_experiment_loops_1000_times():
 def test_agent_affects_and_perceives_environment():
     agent = Mock()
     environment = Mock()
+    decisions = [Mock() for _ in range(1000)]
+    agent.decide.side_effect = decisions
 
-    _assert_argument_passing(_close_over_experiment(environment, agent),
-                             agent.decide,
-                             environment.update)
+    vacuum_world.run_experiment(environment=environment, agent=agent)
+    _assert_call_args(decisions, environment.update.call_args_list)
 
 
 def test_agent_perceives_true_environment():
     agent = Mock()
     environment = Mock()
+    states = [Mock() for _ in range(1000)]
+    Mock.observable_state = PropertyMock(side_effect=states)
 
-    _assert_argument_passing(_close_over_experiment(environment, agent),
-                             environment.trigger_sensors,
-                             agent.decide)
-
-
-def _close_over_experiment(environment, agent):
-    return lambda: vacuum_world.run_experiment(environment=environment,
-                                               agent=agent)
+    vacuum_world.run_experiment(environment=environment, agent=agent)
+    _assert_call_args(states, agent.decide.call_args_list)
 
 
-def _assert_argument_passing(experiment, function_a, function_b):
+def _assert_call_args(values, call_args_list):
     """
-    Assert that output from function A is always passed as input to function B.
+    Assert that each value is the sole argument to its counterpart in
+    the call args list
     """
-    possible_outputs = ['out1', 'out2', 'out3']
-    outputs_from_a = []
-
-    def a(*_):
-        output = random.choice(possible_outputs)
-        outputs_from_a.append(output)
-        return output
-
-    function_a.side_effect = a
-
-    experiment()
-
-    assert len(outputs_from_a) == function_b.call_count
-    for a_out, b_in in zip(outputs_from_a, function_b.call_args_list):
-        assert b_in == ((a_out,), {})
+    assert len(values) == len(call_args_list)
+    for value, args in zip(values, call_args_list):
+        assert args == ((value,), {})
