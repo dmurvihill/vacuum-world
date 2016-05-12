@@ -15,6 +15,7 @@ def run_experiment(environment, agent):
 
 class BasicVacuumWorld(object):
     locations = ['A', 'B']
+    actions = ['LEFT', 'RIGHT', 'SUCK']
 
     def __init__(self, agent_location, dirt_status):
         assert agent_location in BasicVacuumWorld.locations
@@ -29,3 +30,13 @@ class BasicVacuumWorld(object):
             "agent_location": self._agent_location,
             "is_dirty": self._dirt_status[self._agent_location]
         }
+
+    def update(self, action):
+        if action == 'SUCK':
+            self._dirt_status[self._agent_location] = False
+        elif action == 'RIGHT':
+            self._agent_location = 'B'
+        elif action == 'LEFT':
+            self._agent_location = 'A'
+        else:
+            assert action in [BasicVacuumWorld.actions]
