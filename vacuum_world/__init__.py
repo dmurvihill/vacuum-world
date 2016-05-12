@@ -72,4 +72,4 @@ class BasicVacuumWorld(object):
         elif action == 'LEFT':
             self._agent_location = 'A'
         else:
-            assert action in [BasicVacuumWorld.actions]
+            assert False
