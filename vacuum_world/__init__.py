@@ -136,3 +136,16 @@ class CleanFloorEvaluator(object):
         clear of dirt.
         """
         return self._score
+
+
+class SuckyAgent(object):
+    """
+    Vacuum World agent that only chooses the SUCK action.
+    """
+    def decide(self, _):
+        """
+        Suck up the dirt, if there is any.
+
+        :param _: for compliance with the agent interface; not used.
+        """
+        return 'SUCK'
