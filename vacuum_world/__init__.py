@@ -4,7 +4,11 @@ import logging
 NUM_TRIALS = 1000
 LOGGER_NAME = "vacuum_world"
 LOG_LEVEL = logging.INFO
-MSG_AGENT_DECISION = "Agent_decision: {}"
+
+MSG_AGENT_DECISION = "Agent Decision: {}"
+MSG_COMPLETE = "Simulation complete."
+MSG_HELLO = "Vacuum World Simulator v1.0"
+MSG_SCORE = "Agent Score: {}"
 
 
 def run_experiment(environment,
@@ -149,3 +153,19 @@ class SuckyAgent(object):
         :param _: for compliance with the agent interface; not used.
         """
         return 'SUCK'
+
+
+def main():
+    logger = logging.getLogger()
+    logger.setLevel(LOG_LEVEL)
+    logger.info(MSG_HELLO)
+    dirt_status = {location: True for location in BasicVacuumWorld.locations}
+    evaluator = CleanFloorEvaluator()
+
+    run_experiment(BasicVacuumWorld('A', dirt_status),
+                   SuckyAgent(),
+                   evaluator)
+
+    logger.info(MSG_COMPLETE)
+    score = evaluator.score
+    logger.info(MSG_SCORE.format(score))

@@ -1,7 +1,16 @@
 from unittest.mock import Mock, PropertyMock
 
+import pytest
+
 import vacuum_world
-from vacuum_world import MSG_AGENT_DECISION
+from vacuum_world import MSG_AGENT_DECISION, MSG_COMPLETE, MSG_HELLO, MSG_SCORE
+
+
+@pytest.fixture
+def logger(monkeypatch):
+    logger = Mock()
+    monkeypatch.setattr('logging.getLogger', lambda *_: logger)
+    return logger
 
 
 def test_run_experiment_loops_1000_times(monkeypatch):
@@ -67,22 +76,17 @@ def test_logger_name(monkeypatch):
     assert logger.info.call_count == 1000
 
 
-def test_log_level(monkeypatch):
-    logger = Mock()
-    monkeypatch.setattr('logging.getLogger', lambda _: logger)
-
+def test_log_level(logger):
     vacuum_world.run_experiment(Mock(), Mock(), Mock())
     assert logger.setLevel.call_count == 1
     assert logger.setLevel.call_args == ((vacuum_world.LOG_LEVEL,), {})
 
 
-def test_agent_decisions_logged(monkeypatch):
+def test_agent_decisions_logged(logger):
     agent = Mock()
-    logger = Mock()
     decisions = [Mock() for _ in range(1000)]
     log_lines = [MSG_AGENT_DECISION.format(repr(d)) for d in decisions]
     agent.decide.side_effect = decisions
-    monkeypatch.setattr('logging.getLogger', lambda _: logger)
 
     vacuum_world.run_experiment(Mock(), agent, Mock())
     _assert_call_args(log_lines, logger.info.call_args_list)
@@ -93,6 +97,39 @@ def test_experiment_logs_to_handler():
     handler.level = vacuum_world.LOG_LEVEL
     vacuum_world.run_experiment(Mock(), Mock(), Mock(), handler=handler)
     assert handler.handle.call_count == 1000
+
+
+def test_main_log_level(logger):
+    vacuum_world.main()
+    assert logger.setLevel.call_count == 2
+    assert logger.setLevel.call_args[0][0] == vacuum_world.LOG_LEVEL
+
+
+def test_main_prints_welcome_header(logger):
+    vacuum_world.main()
+    messages = [call[0][0] for call in logger.info.call_args_list]
+    assert MSG_HELLO in messages
+
+
+def test_main_runs_experiment(monkeypatch):
+    run_experiment = Mock()
+    monkeypatch.setattr('vacuum_world.run_experiment', run_experiment)
+    vacuum_world.main()
+    assert run_experiment.call_count == 1
+
+
+def test_main_reports_score(monkeypatch, logger):
+    for score in (0, 1, 10):
+        evaluator = Mock()
+        Mock.score = PropertyMock(return_value=score)
+        monkeypatch.setattr('vacuum_world.CleanFloorEvaluator',
+                            lambda: evaluator)
+        vacuum_world.main()
+
+        score_report = MSG_SCORE.format(score)
+        messages = [call[0][0] for call in logger.info.call_args_list]
+        assert MSG_COMPLETE in messages
+        assert score_report in messages
 
 
 def _assert_call_args(values, call_args_list):
