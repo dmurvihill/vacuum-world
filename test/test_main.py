@@ -1,18 +1,22 @@
 from unittest.mock import Mock, PropertyMock
 
 import vacuum_world
+from vacuum_world import MSG_AGENT_DECISION
 
 
-def test_run_experiment_loops_1000_times():
+def test_run_experiment_loops_1000_times(monkeypatch):
     agent = Mock()
     environment = Mock()
     evaluator = Mock()
+    logger = Mock()
+    monkeypatch.setattr('logging.getLogger', lambda _: logger)
 
     vacuum_world.run_experiment(environment, agent, evaluator)
 
     assert agent.decide.call_count == 1000
     assert environment.update.call_count == 1000
     assert evaluator.update.call_count == 1000
+    assert logger.info.call_count == 1000
 
 
 def test_agent_affects_and_perceives_environment():
@@ -49,6 +53,46 @@ def test_evaluator_sees_full_environment_state():
         _assert_call_args(states, evaluator.update.call_args_list)
     finally:
         del Mock.state
+
+
+def test_logger_name(monkeypatch):
+    logger = Mock()
+
+    def get_logger(name):
+        assert name == vacuum_world.LOGGER_NAME
+        return logger
+
+    monkeypatch.setattr('logging.getLogger', get_logger)
+    vacuum_world.run_experiment(Mock(), Mock(), Mock())
+    assert logger.info.call_count == 1000
+
+
+def test_log_level(monkeypatch):
+    logger = Mock()
+    monkeypatch.setattr('logging.getLogger', lambda _: logger)
+
+    vacuum_world.run_experiment(Mock(), Mock(), Mock())
+    assert logger.setLevel.call_count == 1
+    assert logger.setLevel.call_args == ((vacuum_world.LOG_LEVEL,), {})
+
+
+def test_agent_decisions_logged(monkeypatch):
+    agent = Mock()
+    logger = Mock()
+    decisions = [Mock() for _ in range(1000)]
+    log_lines = [MSG_AGENT_DECISION.format(repr(d)) for d in decisions]
+    agent.decide.side_effect = decisions
+    monkeypatch.setattr('logging.getLogger', lambda _: logger)
+
+    vacuum_world.run_experiment(Mock(), agent, Mock())
+    _assert_call_args(log_lines, logger.info.call_args_list)
+
+
+def test_experiment_logs_to_handler():
+    handler = Mock()
+    handler.level = vacuum_world.LOG_LEVEL
+    vacuum_world.run_experiment(Mock(), Mock(), Mock(), handler=handler)
+    assert handler.handle.call_count == 1000
 
 
 def _assert_call_args(values, call_args_list):

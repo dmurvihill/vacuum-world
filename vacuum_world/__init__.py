@@ -1,7 +1,16 @@
+import logging
+
+
 NUM_TRIALS = 1000
+LOGGER_NAME = "vacuum_world"
+LOG_LEVEL = logging.INFO
+MSG_AGENT_DECISION = "Agent_decision: {}"
 
 
-def run_experiment(environment, agent, evaluator):
+def run_experiment(environment,
+                   agent,
+                   evaluator,
+                   handler=logging.NullHandler()):
     """
     Simulate an agent in the environment for 1000 steps.
 
@@ -9,9 +18,15 @@ def run_experiment(environment, agent, evaluator):
     :param agent: agent to evaluate
     :param evaluator: object that scores the agent against the
       performance measure
+    :param handler: log handler to report environment changes to
     """
+    logger = logging.getLogger(LOGGER_NAME)
+    logger.setLevel(LOG_LEVEL)
+    logger.addHandler(handler)
+
     for i in range(1000):
         decision = agent.decide(environment.observable_state)
+        logger.info(MSG_AGENT_DECISION.format(repr(decision)))
         environment.update(decision)
         evaluator.update(environment.state)
 
@@ -83,7 +98,8 @@ class BasicVacuumWorld(object):
         Update the environment with the results of an action taken by
         the agent's actuators.
 
-        :param action: The action the agent takes. Allowed values are 'LEFT', 'RIGHT', and 'SUCK'.
+        :param action: The action the agent takes. Allowed values are
+          'LEFT', 'RIGHT', and 'SUCK'.
         """
         if action == 'SUCK':
             self._dirt_status[self._agent_location] = False
