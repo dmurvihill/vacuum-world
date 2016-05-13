@@ -47,6 +47,23 @@ class BasicVacuumWorld(object):
         self._dirt_status = dirt_status
 
     @property
+    def state(self):
+        """
+        All information, observable or not, about the state of the
+        environment.
+
+        A dictionary with two keys:
+          - agent_location gives the agent's present location
+          - dirt_status is a dictionary with a key for each location,
+            and a boolean indicating whether there is dirt in that
+            location.
+        """
+        return {
+            "agent_location": self._agent_location,
+            "dirt_status": self._dirt_status
+        }
+
+    @property
     def observable_state(self):
         """
         All information the agent's sensors can observe.

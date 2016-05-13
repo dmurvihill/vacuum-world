@@ -25,6 +25,22 @@ def test_init_with_non_boolean_dirt_status_fails():
         BasicVacuumWorld('A', {'A': Mock(), 'B': True})
 
 
+def test_state_has_agent_location():
+    dirt_status = {'A': True, 'B': True}
+    for agent_location in BasicVacuumWorld.locations:
+        environment = BasicVacuumWorld(agent_location, dirt_status)
+        assert environment.state['agent_location'] == agent_location
+
+
+def test_state_has_dirt_status():
+    dirt_statuses = [{'A': True, 'B': True},
+                     {'A': False, 'B': True},
+                     {'A': True, 'B': False}]
+    for dirt_status in dirt_statuses:
+        environment = BasicVacuumWorld('A', dirt_status)
+        assert environment.state['dirt_status'] == dirt_status
+
+
 def test_location_is_observable():
     for agent_location in BasicVacuumWorld.locations:
         environment = BasicVacuumWorld(agent_location,
