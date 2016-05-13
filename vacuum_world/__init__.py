@@ -93,3 +93,30 @@ class BasicVacuumWorld(object):
             self._agent_location = 'A'
         else:
             assert False
+
+
+class CleanFloorEvaluator(object):
+    """
+    Evaluator that scores Vacuum World environments highly for having
+    clean floors.
+    """
+    def __init__(self):
+        self._score = 0
+
+    def update(self, state):
+        """
+        Award one point for each location that is clear of dirt.
+
+        :param state: Environment state dictionary that has a
+          "dirt_status" key, which maps to a dictionary of
+          location -> has_dirt.
+        """
+        self._score += list(state["dirt_status"].values()).count(False)
+
+    @property
+    def score(self):
+        """
+        Sum of the total number of time steps each location has been
+        clear of dirt.
+        """
+        return self._score
