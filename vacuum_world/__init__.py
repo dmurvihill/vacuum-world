@@ -1,16 +1,19 @@
 NUM_TRIALS = 1000
 
 
-def run_experiment(environment, agent):
+def run_experiment(environment, agent, evaluator):
     """
     Simulate an agent in the environment for 1000 steps.
 
     :param environment: where the agent must perform
     :param agent: agent to evaluate
+    :param evaluator: object that scores the agent against the
+      performance measure
     """
     for i in range(1000):
         decision = agent.decide(environment.observable_state)
         environment.update(decision)
+        evaluator.update(environment.state)
 
 
 class BasicVacuumWorld(object):
