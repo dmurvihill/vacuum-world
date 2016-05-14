@@ -1,3 +1,4 @@
+import argparse
 import logging
 import sys
 
@@ -7,9 +8,13 @@ LOGGER_NAME = "vacuum_world"
 LOG_LEVEL = logging.INFO
 
 MSG_AGENT_DECISION = "t={}\tAgent Decision: {}"
+MSG_BAD_BOOLEAN_STR = "Invalid boolean string: {}"
 MSG_COMPLETE = "Simulation complete."
 MSG_HELLO = "Vacuum World Simulator v1.0"
 MSG_SCORE = "Agent Score: {}"
+
+DIRTY_VALUES = ('y', 'yes', 't', 'true', 'dirty')
+CLEAN_VALUES = ('n', 'no', 'f', 'false', 'clean')
 
 
 def run_experiment(environment, agent, evaluator):
@@ -154,14 +159,24 @@ class SuckyAgent(object):
 
 
 def main():
+    # Set up logging
     logger = logging.getLogger()
     handler = logging.StreamHandler(stream=sys.stdout)
     logger.setLevel(LOG_LEVEL)
     logger.addHandler(handler)
-    logger.info(MSG_HELLO)
-    dirt_status = {location: True for location in BasicVacuumWorld.locations}
+
+    # Parse arguments
+    arg_parser = argparse.ArgumentParser()
+    arg_parser.add_argument('--dirt-status', type=_strtobool, nargs='+',
+                            required=False, default=[True, True])
+
+    args = arg_parser.parse_args()
+
+    dirt_status_tuples = zip(BasicVacuumWorld.locations, args.dirt_status)
+    dirt_status = {location: status for location, status in dirt_status_tuples}
     evaluator = CleanFloorEvaluator()
 
+    logger.info(MSG_HELLO)
     run_experiment(BasicVacuumWorld('A', dirt_status),
                    SuckyAgent(),
                    evaluator)
@@ -169,6 +184,18 @@ def main():
     logger.info(MSG_COMPLETE)
     score = evaluator.score
     logger.info(MSG_SCORE.format(score))
+
+
+def _strtobool(string):
+    string = string.lower()
+    if string in DIRTY_VALUES:
+        value = True
+    elif string in CLEAN_VALUES:
+        value = False
+    else:
+        message = MSG_BAD_BOOLEAN_STR.format(string)
+        raise argparse.ArgumentTypeError(message)
+    return value
 
 
 if __name__ == '__main__':

@@ -6,6 +6,13 @@ import pytest
 import vacuum_world
 from vacuum_world import MSG_AGENT_DECISION, MSG_COMPLETE, MSG_HELLO, MSG_SCORE
 
+DEFAULT_ARGS = ['vacuum_world.py', '--dirt-status', 'f', 'f']
+
+
+@pytest.fixture
+def default_args(monkeypatch):
+    monkeypatch.setattr('sys.argv', DEFAULT_ARGS)
+
 
 @pytest.fixture
 def logger(monkeypatch):
@@ -94,26 +101,26 @@ def test_agent_decisions_logged(logger):
     _assert_call_args(log_lines, logger.info.call_args_list)
 
 
-def test_main_log_level(logger):
+def test_main_log_level(logger, default_args):
     vacuum_world.main()
     assert logger.setLevel.call_count == 2
     assert logger.setLevel.call_args[0][0] == vacuum_world.LOG_LEVEL
 
 
-def test_main_prints_welcome_header(logger):
+def test_main_prints_welcome_header(logger, default_args):
     vacuum_world.main()
     messages = [call[0][0] for call in logger.info.call_args_list]
     assert MSG_HELLO in messages
 
 
-def test_main_runs_experiment(monkeypatch):
+def test_main_runs_experiment(monkeypatch, default_args):
     run_experiment = Mock()
     monkeypatch.setattr('vacuum_world.run_experiment', run_experiment)
     vacuum_world.main()
     assert run_experiment.call_count == 1
 
 
-def test_main_sets_handler(monkeypatch):
+def test_main_sets_handler(monkeypatch, default_args):
     run_experiment = Mock()
     stream_handler_class = Mock()
     logger = Mock()
@@ -128,7 +135,7 @@ def test_main_sets_handler(monkeypatch):
     assert vacuum_world.MSG_HELLO in messages
 
 
-def test_main_reports_score(monkeypatch, logger):
+def test_main_reports_score(monkeypatch, logger, default_args):
     for score in (0, 1, 10):
         evaluator = Mock()
         Mock.score = PropertyMock(return_value=score)
@@ -140,6 +147,58 @@ def test_main_reports_score(monkeypatch, logger):
         messages = [call[0][0] for call in logger.info.call_args_list]
         assert MSG_COMPLETE in messages
         assert score_report in messages
+
+
+def test_main_with_bad_dirt_status_fails(monkeypatch, logger):
+    run_experiment = Mock()
+    argv = ['vacuum_world.py', '--dirt-status', 't', 'foo']
+    monkeypatch.setattr('sys.argv', argv)
+    monkeypatch.setattr('vacuum_world.run_experiment', run_experiment)
+
+    with pytest.raises(SystemExit):
+        vacuum_world.main()
+
+    assert not run_experiment.called
+
+
+def test_main_sets_dirt(monkeypatch, logger):
+    dirt_args_list = [('f', 'f'),
+                      ('t', 'f'),
+                      ('f', 't')] + list(
+        zip(vacuum_world.DIRTY_VALUES,
+            vacuum_world.CLEAN_VALUES))
+    dirt_status_list = [{'A': False, 'B': False},
+                        {'A': True, 'B': False},
+                        {'A': False, 'B': True}] + \
+                       [{'A': True, 'B': False}] * len(
+                           vacuum_world.DIRTY_VALUES)
+
+    for dirt_args, dirt_status in zip(dirt_args_list, dirt_status_list):
+        environment = Mock()
+        evaluator = Mock()
+        environment.locations = ['A', 'B']
+        argv = ['vacuum_world.py', '--dirt-status'] + list(dirt_args)
+        monkeypatch.setattr('vacuum_world.CleanFloorEvaluator', evaluator)
+        monkeypatch.setattr('vacuum_world.BasicVacuumWorld', environment)
+        monkeypatch.setattr('sys.argv', argv)
+
+        vacuum_world.main()
+
+        assert environment.call_args[0][1] == dirt_status
+
+
+def test_main_has_default_dirt_status(monkeypatch, logger):
+    environment = Mock()
+    evaluator = Mock()
+    environment.locations = ['A', 'B']
+
+    monkeypatch.setattr('vacuum_world.CleanFloorEvaluator', evaluator)
+    monkeypatch.setattr('vacuum_world.BasicVacuumWorld', environment)
+    monkeypatch.setattr('sys.argv', ['vacuum_world.py'])
+
+    vacuum_world.main()
+
+    assert environment.call_args[0][1] == {'A': True, 'B': True}
 
 
 def _assert_call_args(values, call_args_list):
