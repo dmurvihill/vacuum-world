@@ -1,4 +1,5 @@
 import argparse
+import importlib
 import logging
 import sys
 
@@ -8,7 +9,10 @@ LOGGER_NAME = "vacuum_world"
 LOG_LEVEL = logging.INFO
 
 MSG_AGENT_DECISION = "t={}\tAgent Decision: {}"
-MSG_DESCRIPTION_AGENT_LOCATION= "Initial location of the agent"
+MSG_AGENT_ERROR = "Agent caused the following error: {}"
+MSG_AGENT_NOT_FOUND = "Could not load agent \'{}\'"
+MSG_DESCRIPTION_AGENT = "Import path and class name for the agent"
+MSG_DESCRIPTION_AGENT_LOCATION = "Initial location of the agent"
 MSG_DESCRIPTION_DIRT_STATUS = "Initial dirt status each location. 't' for a" \
                               "dirty floor, 'f' for a clean one."
 MSG_DESCRIPTION_PROGRAM = "Agent evaluator and environment simulator for " \
@@ -16,10 +20,16 @@ MSG_DESCRIPTION_PROGRAM = "Agent evaluator and environment simulator for " \
 MSG_BAD_BOOLEAN_STR = "Invalid boolean string: {}"
 MSG_COMPLETE = "Simulation complete."
 MSG_HELLO = "Vacuum World Simulator v1.0"
+MSG_MODULE_NOT_LOADED = "Could not load agent module \'{}\'"
 MSG_SCORE = "Agent Score: {}"
 
 DIRTY_VALUES = ('y', 'yes', 't', 'true', 'dirty')
 CLEAN_VALUES = ('n', 'no', 'f', 'false', 'clean')
+
+
+class AgentError(Exception):
+    def __init__(self, cause):
+        self.cause = cause
 
 
 def run_experiment(environment, agent, evaluator):
@@ -37,9 +47,15 @@ def run_experiment(environment, agent, evaluator):
     logger.setLevel(LOG_LEVEL)
 
     for t in range(1, 1001):
-        decision = agent.decide(environment.observable_state)
+        try:
+            decision = agent.decide(environment.observable_state)
+        except Exception as e:
+            raise AgentError(e)
         logger.info(MSG_AGENT_DECISION.format(t, repr(decision)))
-        environment.update(decision)
+        try:
+            environment.update(decision)
+        except ValueError as e:
+            raise AgentError(e)
         evaluator.update(environment.state)
 
 
@@ -120,7 +136,7 @@ class BasicVacuumWorld(object):
         elif action == 'LEFT':
             self._agent_location = 'A'
         else:
-            assert False
+            raise ValueError(action)
 
 
 class CleanFloorEvaluator(object):
@@ -172,6 +188,9 @@ def main():
 
     # Parse arguments
     arg_parser = argparse.ArgumentParser(description=MSG_DESCRIPTION_PROGRAM)
+    arg_parser.add_argument('--agent', type=str, required=False,
+                            default='SuckyAgent', metavar='AGENT_CLASS',
+                            help=MSG_DESCRIPTION_AGENT)
     arg_parser.add_argument('--dirt-status', type=_strtobool, nargs=2,
                             required=False, default=[True, True],
                             metavar=('LOC_A_STATUS', 'LOC_B_STATUS'),
@@ -179,19 +198,32 @@ def main():
     arg_parser.add_argument('--agent-location', type=str, required=False,
                             default='A', choices=BasicVacuumWorld.locations,
                             help=MSG_DESCRIPTION_AGENT_LOCATION)
-
     args = arg_parser.parse_args()
+
+    logger.info(MSG_HELLO)
+
+    try:
+        agent_class = _load_agent(args.agent)
+    except ImportError as e:
+        logger.error(MSG_MODULE_NOT_LOADED.format(e.name))
+        return 1
+    except _ClassNotFoundError:
+        logger.error(MSG_AGENT_NOT_FOUND.format(args.agent))
+        return 1
 
     dirt_status_tuples = zip(BasicVacuumWorld.locations, args.dirt_status)
     dirt_status = {location: status for location, status in dirt_status_tuples}
     evaluator = CleanFloorEvaluator()
 
-    logger.info(MSG_HELLO)
-    run_experiment(BasicVacuumWorld(args.agent_location, dirt_status),
-                   SuckyAgent(),
-                   evaluator)
+    try:
+        run_experiment(BasicVacuumWorld(args.agent_location, dirt_status),
+                       agent_class(),
+                       evaluator)
 
-    logger.info(MSG_COMPLETE)
+        logger.info(MSG_COMPLETE)
+    except AgentError as e:
+        logger.error(MSG_AGENT_ERROR.format(repr(e.cause)))
+
     score = evaluator.score
     logger.info(MSG_SCORE.format(score))
 
@@ -206,6 +238,28 @@ def _strtobool(string):
         message = MSG_BAD_BOOLEAN_STR.format(string)
         raise argparse.ArgumentTypeError(message)
     return value
+
+
+def _load_agent(agent_path):
+    agent_path_segments = agent_path.split('.')
+    agent_module_name = '.'.join(agent_path_segments[:-1])
+    agent_class_name = agent_path_segments[-1]
+    if agent_module_name != '':
+        agent_module = importlib.import_module(agent_module_name)
+        try:
+            agent_class = getattr(agent_module, agent_class_name)
+        except AttributeError:
+            raise _ClassNotFoundError
+    else:
+        try:
+            agent_class = globals()[agent_class_name]
+        except KeyError:
+            raise _ClassNotFoundError
+    return agent_class
+
+
+class _ClassNotFoundError(Exception):
+    pass
 
 
 if __name__ == '__main__':

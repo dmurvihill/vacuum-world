@@ -36,6 +36,22 @@ def test_run_experiment_loops_1000_times(monkeypatch):
     assert logger.info.call_count == 1000
 
 
+def test_run_experiment_handles_agent_exceptions(logger):
+    agent = Mock()
+    agent.decide.side_effect = Exception
+
+    with pytest.raises(vacuum_world.AgentError):
+        vacuum_world.run_experiment(Mock(), agent, Mock())
+
+
+def test_run_experiment_handles_bad_inputs_to_environment(logger):
+    environment = Mock()
+    environment.update.side_effect = ValueError
+
+    with pytest.raises(vacuum_world.AgentError):
+        vacuum_world.run_experiment(environment, Mock(), Mock())
+
+
 def test_agent_affects_and_perceives_environment():
     agent = Mock()
     environment = Mock()
@@ -244,6 +260,89 @@ def test_main_catches_invalid_agent_location(monkeypatch, logger):
 
     with pytest.raises(SystemExit):
         vacuum_world.main()
+
+
+def test_main_loads_agent(monkeypatch, logger):
+    module_names = ['my_package', 'foo.bar']
+    for module_name in module_names:
+        module = Mock()
+        my_agent_class = Mock()
+        run_experiment = Mock()
+        module.getattr.return_value = my_agent_class
+        argv = ['vacuum_world.py', '--agent', '{}.MyAgent'.format(module_name)]
+        monkeypatch.setattr('sys.argv', argv)
+        monkeypatch.setattr('vacuum_world.run_experiment', run_experiment)
+        sys.modules[module_name] = module
+
+        try:
+            vacuum_world.main()
+
+            assert module.getattr.call_args == (('MyAgent',), {})
+            assert run_experiment.call_args[0][1] == \
+                   my_agent_class.return_value
+        finally:
+            del sys.modules[module_name]
+
+
+def test_load_nonexistent_agent(monkeypatch, logger):
+    my_package = Mock()
+    run_experiment = Mock()
+    my_package.getattr.side_effect = AttributeError
+    argv = ['vacuum_world.py', '--agent', 'my_package.FooBar']
+    monkeypatch.setattr('sys.argv', argv)
+    monkeypatch.setattr('vacuum_world.run_experiment', run_experiment)
+    sys.modules['my_package'] = my_package
+
+    try:
+        vacuum_world.main()
+
+        error_message = vacuum_world.MSG_AGENT_NOT_FOUND.format("my_package.FooBar")
+        messages = [call[0][0] for call in logger.error.call_args_list]
+        assert not run_experiment.called
+        assert error_message in messages
+    finally:
+        del sys.modules['my_package']
+
+
+def test_load_nonexistent_agent_from_same_module(monkeypatch, logger):
+    run_experiment = Mock()
+    argv = ['vacuum_world.py', '--agent', 'FooBar']
+    monkeypatch.setattr('sys.argv', argv)
+    monkeypatch.setattr('vacuum_world.run_experiment', run_experiment)
+
+    vacuum_world.main()
+
+    error_message = vacuum_world.MSG_AGENT_NOT_FOUND.format("FooBar")
+    messages = [call[0][0] for call in logger.error.call_args_list]
+    assert not run_experiment.called
+    assert error_message in messages
+
+
+def test_load_nonexistent_agent_module(monkeypatch, logger):
+    run_experiment = Mock()
+    argv = ['vacuum_world.py', '--agent', 'foo.bar.FooBar']
+    monkeypatch.setattr('sys.argv', argv)
+    monkeypatch.setattr('vacuum_world.run_experiment', run_experiment)
+
+    vacuum_world.main()
+
+    error_message = vacuum_world.MSG_MODULE_NOT_LOADED.format("foo")
+    messages = [call[0][0] for call in logger.error.call_args_list]
+    assert not run_experiment.called
+    assert error_message in messages
+
+
+def test_main_catches_experiment_exceptions(monkeypatch, default_args, logger):
+    error = ValueError('blah')
+    run_experiment = Mock()
+    run_experiment.side_effect = vacuum_world.AgentError(error)
+    monkeypatch.setattr('vacuum_world.run_experiment', run_experiment)
+
+    vacuum_world.main()
+
+    error_message = vacuum_world.MSG_AGENT_ERROR.format(repr(error))
+    messages = [call[0][0] for call in logger.error.call_args_list]
+    assert error_message in messages
 
 
 def _assert_call_args(values, call_args_list):

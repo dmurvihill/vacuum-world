@@ -62,7 +62,7 @@ def test_same_location_dirt_is_observable():
 
 
 def test_illegal_action_fails(dirty_floor):
-    with pytest.raises(AssertionError):
+    with pytest.raises(ValueError):
         dirty_floor.update('FOOBAR')
 
 
