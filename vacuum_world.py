@@ -169,3 +169,7 @@ def main():
     logger.info(MSG_COMPLETE)
     score = evaluator.score
     logger.info(MSG_SCORE.format(score))
+
+
+if __name__ == '__main__':
+    main()
