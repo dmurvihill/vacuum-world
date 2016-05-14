@@ -8,6 +8,11 @@ LOGGER_NAME = "vacuum_world"
 LOG_LEVEL = logging.INFO
 
 MSG_AGENT_DECISION = "t={}\tAgent Decision: {}"
+MSG_DESCRIPTION_AGENT_LOCATION= "Initial location of the agent"
+MSG_DESCRIPTION_DIRT_STATUS = "Initial dirt status each location. 't' for a" \
+                              "dirty floor, 'f' for a clean one."
+MSG_DESCRIPTION_PROGRAM = "Agent evaluator and environment simulator for " \
+                          "the vacuum world described in AIMA, page 38."
 MSG_BAD_BOOLEAN_STR = "Invalid boolean string: {}"
 MSG_COMPLETE = "Simulation complete."
 MSG_HELLO = "Vacuum World Simulator v1.0"
@@ -166,11 +171,14 @@ def main():
     logger.addHandler(handler)
 
     # Parse arguments
-    arg_parser = argparse.ArgumentParser()
-    arg_parser.add_argument('--dirt-status', type=_strtobool, nargs='+',
-                            required=False, default=[True, True])
+    arg_parser = argparse.ArgumentParser(description=MSG_DESCRIPTION_PROGRAM)
+    arg_parser.add_argument('--dirt-status', type=_strtobool, nargs=2,
+                            required=False, default=[True, True],
+                            metavar=('LOC_A_STATUS', 'LOC_B_STATUS'),
+                            help=MSG_DESCRIPTION_DIRT_STATUS)
     arg_parser.add_argument('--agent-location', type=str, required=False,
-                            default='A', choices=BasicVacuumWorld.locations)
+                            default='A', choices=BasicVacuumWorld.locations,
+                            help=MSG_DESCRIPTION_AGENT_LOCATION)
 
     args = arg_parser.parse_args()
 

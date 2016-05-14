@@ -161,6 +161,18 @@ def test_main_with_bad_dirt_status_fails(monkeypatch, logger):
     assert not run_experiment.called
 
 
+def test_main_with_incomplete_dirt_status_fails(monkeypatch, logger):
+    run_experiment = Mock()
+    argv = ['vacuum_world.py', '--dirt-status', 't']
+    monkeypatch.setattr('sys.argv', argv)
+    monkeypatch.setattr('vacuum_world.run_experiment', run_experiment)
+
+    with pytest.raises(SystemExit):
+        vacuum_world.main()
+
+    assert not run_experiment.called
+
+
 def test_main_sets_dirt(monkeypatch, logger):
     dirt_args_list = [('f', 'f'),
                       ('t', 'f'),
