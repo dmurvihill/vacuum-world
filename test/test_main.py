@@ -6,7 +6,7 @@ import pytest
 import vacuum_world
 from vacuum_world import MSG_AGENT_DECISION, MSG_COMPLETE, MSG_HELLO, MSG_SCORE
 
-DEFAULT_ARGS = ['vacuum_world.py', '--dirt-status', 'f', 'f']
+DEFAULT_ARGS = ['vacuum_world.py']
 
 
 @pytest.fixture
@@ -199,6 +199,39 @@ def test_main_has_default_dirt_status(monkeypatch, logger):
     vacuum_world.main()
 
     assert environment.call_args[0][1] == {'A': True, 'B': True}
+
+
+def test_main_sets_agent_location(monkeypatch, logger):
+    locations = ['A', 'B']
+    environment = Mock()
+    evaluator = Mock()
+    environment.locations = locations
+
+    for location in locations:
+        argv = ['vacuum_world.py', '--agent-location', location]
+
+        monkeypatch.setattr('vacuum_world.CleanFloorEvaluator', evaluator)
+        monkeypatch.setattr('vacuum_world.BasicVacuumWorld', environment)
+        monkeypatch.setattr('sys.argv', argv)
+
+        vacuum_world.main()
+        assert environment.call_args[0][0] == location
+
+
+def test_main_catches_invalid_agent_location(monkeypatch, logger):
+    locations = ['A', 'B']
+    environment = Mock()
+    evaluator = Mock()
+    environment.locations = locations
+
+    argv = ['vacuum_world.py', '--agent-location', 'C']
+
+    monkeypatch.setattr('vacuum_world.CleanFloorEvaluator', evaluator)
+    monkeypatch.setattr('vacuum_world.BasicVacuumWorld', environment)
+    monkeypatch.setattr('sys.argv', argv)
+
+    with pytest.raises(SystemExit):
+        vacuum_world.main()
 
 
 def _assert_call_args(values, call_args_list):

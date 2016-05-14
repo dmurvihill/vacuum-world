@@ -169,6 +169,8 @@ def main():
     arg_parser = argparse.ArgumentParser()
     arg_parser.add_argument('--dirt-status', type=_strtobool, nargs='+',
                             required=False, default=[True, True])
+    arg_parser.add_argument('--agent-location', type=str, required=False,
+                            default='A', choices=BasicVacuumWorld.locations)
 
     args = arg_parser.parse_args()
 
@@ -177,7 +179,7 @@ def main():
     evaluator = CleanFloorEvaluator()
 
     logger.info(MSG_HELLO)
-    run_experiment(BasicVacuumWorld('A', dirt_status),
+    run_experiment(BasicVacuumWorld(args.agent_location, dirt_status),
                    SuckyAgent(),
                    evaluator)
 
