@@ -1,36 +1,34 @@
 import logging
+import sys
 
 
 NUM_TRIALS = 1000
 LOGGER_NAME = "vacuum_world"
 LOG_LEVEL = logging.INFO
 
-MSG_AGENT_DECISION = "Agent Decision: {}"
+MSG_AGENT_DECISION = "t={}\tAgent Decision: {}"
 MSG_COMPLETE = "Simulation complete."
 MSG_HELLO = "Vacuum World Simulator v1.0"
 MSG_SCORE = "Agent Score: {}"
 
 
-def run_experiment(environment,
-                   agent,
-                   evaluator,
-                   handler=logging.NullHandler()):
+def run_experiment(environment, agent, evaluator):
     """
     Simulate an agent in the environment for 1000 steps.
+
+    Decisions are logged to the 'vacuum_world' logger.
 
     :param environment: where the agent must perform
     :param agent: agent to evaluate
     :param evaluator: object that scores the agent against the
       performance measure
-    :param handler: log handler to report environment changes to
     """
     logger = logging.getLogger(LOGGER_NAME)
     logger.setLevel(LOG_LEVEL)
-    logger.addHandler(handler)
 
-    for i in range(1000):
+    for t in range(1, 1001):
         decision = agent.decide(environment.observable_state)
-        logger.info(MSG_AGENT_DECISION.format(repr(decision)))
+        logger.info(MSG_AGENT_DECISION.format(t, repr(decision)))
         environment.update(decision)
         evaluator.update(environment.state)
 
@@ -157,7 +155,9 @@ class SuckyAgent(object):
 
 def main():
     logger = logging.getLogger()
+    handler = logging.StreamHandler(stream=sys.stdout)
     logger.setLevel(LOG_LEVEL)
+    logger.addHandler(handler)
     logger.info(MSG_HELLO)
     dirt_status = {location: True for location in BasicVacuumWorld.locations}
     evaluator = CleanFloorEvaluator()

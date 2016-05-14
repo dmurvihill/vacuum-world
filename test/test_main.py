@@ -1,3 +1,4 @@
+import sys
 from unittest.mock import Mock, PropertyMock
 
 import pytest
@@ -85,18 +86,12 @@ def test_log_level(logger):
 def test_agent_decisions_logged(logger):
     agent = Mock()
     decisions = [Mock() for _ in range(1000)]
-    log_lines = [MSG_AGENT_DECISION.format(repr(d)) for d in decisions]
+    log_lines = [MSG_AGENT_DECISION.format(t, repr(decisions[t - 1]))
+                 for t in range(1, 1001)]
     agent.decide.side_effect = decisions
 
     vacuum_world.run_experiment(Mock(), agent, Mock())
     _assert_call_args(log_lines, logger.info.call_args_list)
-
-
-def test_experiment_logs_to_handler():
-    handler = Mock()
-    handler.level = vacuum_world.LOG_LEVEL
-    vacuum_world.run_experiment(Mock(), Mock(), Mock(), handler=handler)
-    assert handler.handle.call_count == 1000
 
 
 def test_main_log_level(logger):
@@ -116,6 +111,21 @@ def test_main_runs_experiment(monkeypatch):
     monkeypatch.setattr('vacuum_world.run_experiment', run_experiment)
     vacuum_world.main()
     assert run_experiment.call_count == 1
+
+
+def test_main_sets_handler(monkeypatch):
+    run_experiment = Mock()
+    stream_handler_class = Mock()
+    logger = Mock()
+    monkeypatch.setattr('logging.getLogger', lambda: logger)
+    monkeypatch.setattr('vacuum_world.run_experiment', run_experiment)
+    monkeypatch.setattr('logging.StreamHandler', stream_handler_class)
+
+    vacuum_world.main()
+
+    messages = [args[0][0] for args in logger.info.call_args_list]
+    assert stream_handler_class.call_args[1]["stream"] == sys.stdout
+    assert vacuum_world.MSG_HELLO in messages
 
 
 def test_main_reports_score(monkeypatch, logger):
