@@ -1,3 +1,4 @@
+import builtins
 import sys
 from unittest.mock import Mock, PropertyMock
 
@@ -275,9 +276,9 @@ def test_main_loads_agent(monkeypatch, logger):
         sys.modules[module_name] = module
 
         try:
+            setattr(module, 'MyAgent', my_agent_class)
             vacuum_world.main()
 
-            assert module.getattr.call_args == (('MyAgent',), {})
             assert run_experiment.call_args[0][1] == \
                    my_agent_class.return_value
         finally:
@@ -285,12 +286,20 @@ def test_main_loads_agent(monkeypatch, logger):
 
 
 def test_load_nonexistent_agent(monkeypatch, logger):
+    old_getattr = getattr
     my_package = Mock()
+
+    def raise_attribute_error_on_foobar(*args):
+        if args[0] == my_package and args[1] == 'FooBar':
+            raise AttributeError()
+        else:
+            return old_getattr(*args)
+
     run_experiment = Mock()
-    my_package.getattr.side_effect = AttributeError
     argv = ['vacuum_world.py', '--agent', 'my_package.FooBar']
     monkeypatch.setattr('sys.argv', argv)
     monkeypatch.setattr('vacuum_world.run_experiment', run_experiment)
+    monkeypatch.setattr('builtins.getattr', raise_attribute_error_on_foobar)
     sys.modules['my_package'] = my_package
 
     try:
