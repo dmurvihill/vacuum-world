@@ -9,26 +9,28 @@ LOGGER_NAME = "vacuum_world"
 LOG_LEVEL = logging.INFO
 
 MSG_AGENT_DECISION = "t={}\tAgent Decision: {}"
-MSG_AGENT_ERROR = "Agent caused the following error: {}"
 MSG_AGENT_NOT_FOUND = "Could not load agent \'{}\'"
+MSG_BAD_DIRT_STATUS_STR = "Invalid dirt status string: {}"
+MSG_COMPLETE = "Simulation complete."
 MSG_DESCRIPTION_AGENT = "Import path and class name for the agent"
-MSG_DESCRIPTION_AGENT_LOCATION = "Initial location of the agent"
-MSG_DESCRIPTION_DIRT_STATUS = "Initial dirt status each location. 't' for a" \
-                              "dirty floor, 'f' for a clean one."
+MSG_DESCRIPTION_ENVIRONMENT = "Import path and class name for the environment"
 MSG_DESCRIPTION_PROGRAM = "Agent evaluator and environment simulator for " \
                           "the vacuum world described in AIMA, page 38."
-MSG_BAD_BOOLEAN_STR = "Invalid boolean string: {}"
-MSG_COMPLETE = "Simulation complete."
+MSG_EXPERIMENT_ERROR = "Error in {}: {}"
+MSG_ENVIRONMENT_INIT_ERROR = "Bad environment parameter: {}"
+MSG_ENVIRONMENT_NOT_FOUND = "Could not load environment \'{}\'"
 MSG_HELLO = "Vacuum World Simulator v1.0"
 MSG_MODULE_NOT_LOADED = "Could not load agent module \'{}\'"
 MSG_SCORE = "Agent Score: {}"
+MSG_UNRECOGNIZED_ARG = "Unrecognized argument: {}"
 
 DIRTY_VALUES = ('y', 'yes', 't', 'true', 'dirty')
 CLEAN_VALUES = ('n', 'no', 'f', 'false', 'clean')
 
 
-class AgentError(Exception):
-    def __init__(self, cause):
+class ExperimentError(Exception):
+    def __init__(self, component, cause):
+        self.component = component
         self.cause = cause
 
 
@@ -49,13 +51,20 @@ def run_experiment(environment, agent, evaluator):
     for t in range(1, 1001):
         try:
             decision = agent.decide(environment.observable_state)
+        # We assume that ValueError means the environment's input failed the
+        # agent's validation. We further assume that the agent's validation is
+        # correct and the environment's input was truly illegal.
+        except ValueError as e:
+            raise ExperimentError('environment', e)
         except Exception as e:
-            raise AgentError(e)
+            raise ExperimentError('agent', e)
         logger.info(MSG_AGENT_DECISION.format(t, repr(decision)))
         try:
             environment.update(decision)
         except ValueError as e:
-            raise AgentError(e)
+            raise ExperimentError('agent', e)
+        except Exception as e:
+            raise ExperimentError('environment', e)
         evaluator.update(environment.state)
 
 
@@ -71,23 +80,34 @@ class BasicVacuumWorld(object):
     current location. Sucking cleans the current square and clean
     squares stay clean.
     """
+    DIRTY_VALUES = ('y', 'yes', 't', 'true', 'dirty')
+    CLEAN_VALUES = ('n', 'no', 'f', 'false', 'clean')
     locations = ['A', 'B']
     actions = ['LEFT', 'RIGHT', 'SUCK']
 
-    def __init__(self, agent_location, dirt_status):
+    def __init__(self, agent_location=('A',), dirt_status=('t', 't')):
         """
         Initialize a new environment.
 
-        :param agent_location: Starting location of the agent.
-        :param dirt_status: A dictionary mapping from each location in
-          the environment to a boolean value indicating whether there is
-          dirt in that location.
+        :param agent_location: One-element list of strings with the
+          starting location of the agent as its element.
+        :param dirt_status: A two-element list of strings
+          denoting whether there is dirt at each location ['A', 'B'].
         """
-        assert agent_location in BasicVacuumWorld.locations
-        assert set(dirt_status.keys()) == set(BasicVacuumWorld.locations)
-        assert all((type(status) == bool for status in dirt_status.values()))
+        if len(agent_location) != 1:
+            raise ValueError(agent_location)
+        agent_location = agent_location[0]
+        if agent_location not in BasicVacuumWorld.locations:
+            raise ValueError(agent_location)
+        if len(dirt_status) != len(BasicVacuumWorld.locations):
+            raise ValueError(dirt_status)
+        dirt_status_bools = map(BasicVacuumWorld._convert_to_dirt_status,
+                                dirt_status)
+        dirt_status_tuples = zip(BasicVacuumWorld.locations, dirt_status_bools)
+
+        self._dirt_status = {location: status
+                             for location, status in dirt_status_tuples}
         self._agent_location = agent_location
-        self._dirt_status = dirt_status
 
     @property
     def state(self):
@@ -137,6 +157,18 @@ class BasicVacuumWorld(object):
             self._agent_location = 'A'
         else:
             raise ValueError(action)
+
+    @staticmethod
+    def _convert_to_dirt_status(string):
+        string = string.lower()
+        if string in DIRTY_VALUES:
+            dirt_status = True
+        elif string in CLEAN_VALUES:
+            dirt_status = False
+        else:
+            message = MSG_BAD_DIRT_STATUS_STR.format(string)
+            raise ValueError(message)
+        return dirt_status
 
 
 class CleanFloorEvaluator(object):
@@ -191,19 +223,23 @@ def main():
     arg_parser.add_argument('--agent', type=str, required=False,
                             default='SuckyAgent', metavar='AGENT_CLASS',
                             help=MSG_DESCRIPTION_AGENT)
-    arg_parser.add_argument('--dirt-status', type=_strtobool, nargs=2,
-                            required=False, default=[True, True],
-                            metavar=('LOC_A_STATUS', 'LOC_B_STATUS'),
-                            help=MSG_DESCRIPTION_DIRT_STATUS)
-    arg_parser.add_argument('--agent-location', type=str, required=False,
-                            default='A', choices=BasicVacuumWorld.locations,
-                            help=MSG_DESCRIPTION_AGENT_LOCATION)
-    args = arg_parser.parse_args()
+    arg_parser.add_argument('--environment', type=str, required=False,
+                            default='BasicVacuumWorld',
+                            metavar='ENVIRONMENT_CLASS',
+                            help=MSG_DESCRIPTION_ENVIRONMENT)
+    (args, custom_args) = arg_parser.parse_known_args()
+
+    try:
+        environment_args = _extract_environment_args(custom_args)
+    except ValueError as e:
+        message = MSG_UNRECOGNIZED_ARG.format(e.args[0])
+        arg_parser.error(message)
+        raise SystemError("I have reached unreachable code.")
 
     logger.info(MSG_HELLO)
 
     try:
-        agent_class = _load_agent(args.agent)
+        agent_class = _load_class(args.agent)
     except ImportError as e:
         logger.error(MSG_MODULE_NOT_LOADED.format(e.name))
         return 1
@@ -211,18 +247,31 @@ def main():
         logger.error(MSG_AGENT_NOT_FOUND.format(args.agent))
         return 1
 
-    dirt_status_tuples = zip(BasicVacuumWorld.locations, args.dirt_status)
-    dirt_status = {location: status for location, status in dirt_status_tuples}
+    try:
+        environment_class = _load_class(args.environment)
+    except ImportError as e:
+        logger.error(MSG_MODULE_NOT_LOADED.format(e.name))
+        return 1
+    except _ClassNotFoundError:
+        logger.error(MSG_ENVIRONMENT_NOT_FOUND.format(args.environment))
+        return 1
+
+    try:
+        environment = environment_class(**environment_args)
+    except ValueError as e:
+        logger.error(MSG_ENVIRONMENT_INIT_ERROR.format(e.args[0]))
+        return 1
+
     evaluator = CleanFloorEvaluator()
 
     try:
-        run_experiment(BasicVacuumWorld(args.agent_location, dirt_status),
+        run_experiment(environment,
                        agent_class(),
                        evaluator)
 
         logger.info(MSG_COMPLETE)
-    except AgentError as e:
-        logger.error(MSG_AGENT_ERROR.format(repr(e.cause)))
+    except ExperimentError as e:
+        logger.error(MSG_EXPERIMENT_ERROR.format(e.component, repr(e.cause)))
 
     score = evaluator.score
     logger.info(MSG_SCORE.format(score))
@@ -235,12 +284,12 @@ def _strtobool(string):
     elif string in CLEAN_VALUES:
         value = False
     else:
-        message = MSG_BAD_BOOLEAN_STR.format(string)
+        message = MSG_BAD_DIRT_STATUS_STR.format(string)
         raise argparse.ArgumentTypeError(message)
     return value
 
 
-def _load_agent(agent_path):
+def _load_class(agent_path):
     agent_path_segments = agent_path.split('.')
     agent_module_name = '.'.join(agent_path_segments[:-1])
     agent_class_name = agent_path_segments[-1]
@@ -256,6 +305,29 @@ def _load_agent(agent_path):
         except KeyError:
             raise _ClassNotFoundError
     return agent_class
+
+
+def _extract_environment_args(args):
+    environment_args = {}
+    while len(args) > 0:
+        if not args[0].startswith('--env-'):
+            raise ValueError(args[0])
+        param_name = args[0][6:].replace('-', '_')
+        rest = args[1:]
+        if len(rest) > 0:
+            i = 0
+            while i < len(rest):
+                element = rest[i]
+                if element.startswith('--env-'):
+                    break
+                i += 1
+            environment_args[param_name] = rest[:i]
+            args = rest[i:]
+        else:
+            environment_args[param_name] = []
+            args = []
+
+    return environment_args
 
 
 class _ClassNotFoundError(Exception):
