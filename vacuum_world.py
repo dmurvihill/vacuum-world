@@ -219,42 +219,25 @@ def main():
     logger.addHandler(handler)
 
     # Parse arguments
-    arg_parser = argparse.ArgumentParser(description=MSG_DESCRIPTION_PROGRAM)
-    arg_parser.add_argument('--agent', type=str, required=False,
-                            default='SuckyAgent', metavar='AGENT_CLASS',
-                            help=MSG_DESCRIPTION_AGENT)
-    arg_parser.add_argument('--environment', type=str, required=False,
-                            default='BasicVacuumWorld',
-                            metavar='ENVIRONMENT_CLASS',
-                            help=MSG_DESCRIPTION_ENVIRONMENT)
-    arg_parser.add_argument('--evaluator', type=str, required=False,
-                            default='CleanFloorEvaluator',
-                            metavar='EVALUATOR_CLASS',
-                            help=MSG_DESCRIPTION_EVALUATOR)
-    (args, custom_args) = arg_parser.parse_known_args()
-
-    try:
-        environment_args = _extract_environment_args(custom_args)
-    except ValueError as e:
-        message = MSG_UNRECOGNIZED_ARG.format(e.args[0])
-        arg_parser.error(message)
-        raise SystemError("I have reached unreachable code.")
+    args, environment_args = _parse_arguments()
 
     logger.info(MSG_HELLO)
 
+    # Load classes for actors
     environment_class = _try_load_class(args.environment, 'environment')
     agent_class = _try_load_class(args.agent, 'agent')
     evaluator_class = _try_load_class(args.evaluator, 'evaluator')
 
+    # Instantiate actors
+    evaluator = evaluator_class()
+    agent = agent_class()
     try:
         environment = environment_class(**environment_args)
     except ValueError as e:
         logger.error(MSG_ENVIRONMENT_INIT_ERROR.format(e.args[0]))
         return 1
 
-    evaluator = evaluator_class()
-    agent = agent_class()
-
+    # Do the thing
     try:
         run_experiment(environment,
                        agent,
@@ -264,6 +247,7 @@ def main():
     except ExperimentError as e:
         logger.error(MSG_EXPERIMENT_ERROR.format(e.component, repr(e.cause)))
 
+    # Report results
     score = evaluator.score
     logger.info(MSG_SCORE.format(score))
 
@@ -332,6 +316,32 @@ def _extract_environment_args(args):
             args = []
 
     return environment_args
+
+
+def _parse_arguments():
+    arg_parser = argparse.ArgumentParser(description=MSG_DESCRIPTION_PROGRAM)
+    arg_parser.add_argument('--agent', type=str, required=False,
+                            default='SuckyAgent', metavar='AGENT_CLASS',
+                            help=MSG_DESCRIPTION_AGENT)
+    arg_parser.add_argument('--environment', type=str, required=False,
+                            default='BasicVacuumWorld',
+                            metavar='ENVIRONMENT_CLASS',
+                            help=MSG_DESCRIPTION_ENVIRONMENT)
+    arg_parser.add_argument('--evaluator', type=str, required=False,
+                            default='CleanFloorEvaluator',
+                            metavar='EVALUATOR_CLASS',
+                            help=MSG_DESCRIPTION_EVALUATOR)
+    (args, custom_args) = arg_parser.parse_known_args()
+
+    try:
+        environment_args = _extract_environment_args(custom_args)
+    except ValueError as e:
+        message = MSG_UNRECOGNIZED_ARG.format(e.args[0])
+        arg_parser.error(message)
+        raise SystemError("I have reached unreachable code.")
+
+    return args, environment_args
+
 
 
 class _ClassNotFoundError(Exception):
