@@ -14,11 +14,13 @@ MSG_BAD_DIRT_STATUS_STR = "Invalid dirt status string: {}"
 MSG_COMPLETE = "Simulation complete."
 MSG_DESCRIPTION_AGENT = "Import path and class name for the agent"
 MSG_DESCRIPTION_ENVIRONMENT = "Import path and class name for the environment"
+MSG_DESCRIPTION_EVALUATOR = "Import path and class name for the evaluator"
 MSG_DESCRIPTION_PROGRAM = "Agent evaluator and environment simulator for " \
                           "the vacuum world described in AIMA, page 38."
 MSG_EXPERIMENT_ERROR = "Error in {}: {}"
 MSG_ENVIRONMENT_INIT_ERROR = "Bad environment parameter: {}"
 MSG_ENVIRONMENT_NOT_FOUND = "Could not load environment \'{}\'"
+MSG_EVALUATOR_NOT_FOUND = "Could not load evaluator \'{}\'"
 MSG_HELLO = "Vacuum World Simulator v1.0"
 MSG_MODULE_NOT_LOADED = "Could not load agent module \'{}\'"
 MSG_SCORE = "Agent Score: {}"
@@ -227,6 +229,10 @@ def main():
                             default='BasicVacuumWorld',
                             metavar='ENVIRONMENT_CLASS',
                             help=MSG_DESCRIPTION_ENVIRONMENT)
+    arg_parser.add_argument('--evaluator', type=str, required=False,
+                            default='CleanFloorEvaluator',
+                            metavar='EVALUATOR_CLASS',
+                            help=MSG_DESCRIPTION_EVALUATOR)
     (args, custom_args) = arg_parser.parse_known_args()
 
     try:
@@ -257,12 +263,21 @@ def main():
         return 1
 
     try:
+        evaluator_class = _load_class(args.evaluator)
+    except ImportError as e:
+        logger.error(MSG_MODULE_NOT_LOADED.format(e.name))
+        return 1
+    except _ClassNotFoundError:
+        logger.error(MSG_EVALUATOR_NOT_FOUND.format(args.evaluator))
+        return 1
+
+    try:
         environment = environment_class(**environment_args)
     except ValueError as e:
         logger.error(MSG_ENVIRONMENT_INIT_ERROR.format(e.args[0]))
         return 1
 
-    evaluator = CleanFloorEvaluator()
+    evaluator = evaluator_class()
 
     try:
         run_experiment(environment,
