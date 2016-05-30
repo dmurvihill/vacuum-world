@@ -1,4 +1,3 @@
-import builtins
 import sys
 from unittest.mock import Mock, PropertyMock
 
@@ -7,12 +6,14 @@ import pytest
 import vacuum_world
 from vacuum_world import MSG_AGENT_DECISION, MSG_COMPLETE, MSG_HELLO, MSG_SCORE
 
-DEFAULT_ARGS = ['vacuum_world.py']
+get_logger = None
 
 
 @pytest.fixture
 def default_args(monkeypatch):
-    monkeypatch.setattr('sys.argv', DEFAULT_ARGS)
+    monkeypatch.setattr('vacuum_world.BasicVacuumWorld', Mock())
+    monkeypatch.setattr('vacuum_world.run_experiment', Mock())
+    monkeypatch.setattr('sys.argv', ['vacuum_world.py'])
 
 
 @pytest.fixture
@@ -41,16 +42,36 @@ def test_run_experiment_handles_agent_exceptions(logger):
     agent = Mock()
     agent.decide.side_effect = Exception
 
-    with pytest.raises(vacuum_world.AgentError):
+    with pytest.raises(vacuum_world.ExperimentError) as e:
         vacuum_world.run_experiment(Mock(), agent, Mock())
+        assert e.component == 'agent'
 
 
 def test_run_experiment_handles_bad_inputs_to_environment(logger):
     environment = Mock()
     environment.update.side_effect = ValueError
 
-    with pytest.raises(vacuum_world.AgentError):
+    with pytest.raises(vacuum_world.ExperimentError) as e:
         vacuum_world.run_experiment(environment, Mock(), Mock())
+        assert e.component == 'agent'
+
+
+def test_run_experiment_handles_environment_exceptions(logger):
+    environment = Mock()
+    environment.update.side_effect = Exception
+
+    with pytest.raises(vacuum_world.ExperimentError) as e:
+        vacuum_world.run_experiment(environment, Mock(), Mock())
+        assert e.component == 'environment'
+
+
+def test_run_experiment_handles_bad_inputs_to_agent(logger):
+    agent = Mock()
+    agent.decide.side_effect = ValueError
+
+    with pytest.raises(vacuum_world.ExperimentError) as e:
+        vacuum_world.run_experiment(Mock(), agent, Mock())
+        assert e.component == 'environment'
 
 
 def test_agent_affects_and_perceives_environment():
@@ -120,7 +141,7 @@ def test_agent_decisions_logged(logger):
 
 def test_main_log_level(logger, default_args):
     vacuum_world.main()
-    assert logger.setLevel.call_count == 2
+    assert logger.setLevel.call_count == 1
     assert logger.setLevel.call_args[0][0] == vacuum_world.LOG_LEVEL
 
 
@@ -166,101 +187,81 @@ def test_main_reports_score(monkeypatch, logger, default_args):
         assert score_report in messages
 
 
-def test_main_with_bad_dirt_status_fails(monkeypatch, logger):
-    run_experiment = Mock()
-    argv = ['vacuum_world.py', '--dirt-status', 't', 'foo']
-    monkeypatch.setattr('sys.argv', argv)
-    monkeypatch.setattr('vacuum_world.run_experiment', run_experiment)
+def test_main_passes_env_prefixes_to_environment_init(monkeypatch):
+    args_list = [['a', 'b'],
+                 ['a'],
+                 []]
+    parameter_names = ['name1', 'name2']
 
-    with pytest.raises(SystemExit):
-        vacuum_world.main()
+    for parameter_name in parameter_names:
+        for args in args_list:
+            environment = Mock()
+            evaluator = Mock()
+            full_param_option = "--env-{}".format(parameter_name)
+            argv = ['vacuum_world.py', full_param_option] + list(args)
+            monkeypatch.setattr('vacuum_world.CleanFloorEvaluator', evaluator)
+            monkeypatch.setattr('vacuum_world.BasicVacuumWorld', environment)
+            monkeypatch.setattr('sys.argv', argv)
 
-    assert not run_experiment.called
+            vacuum_world.main()
 
-
-def test_main_with_incomplete_dirt_status_fails(monkeypatch, logger):
-    run_experiment = Mock()
-    argv = ['vacuum_world.py', '--dirt-status', 't']
-    monkeypatch.setattr('sys.argv', argv)
-    monkeypatch.setattr('vacuum_world.run_experiment', run_experiment)
-
-    with pytest.raises(SystemExit):
-        vacuum_world.main()
-
-    assert not run_experiment.called
+            assert environment.call_args[1][parameter_name] == args
 
 
-def test_main_sets_dirt(monkeypatch, logger):
-    dirt_args_list = [('f', 'f'),
-                      ('t', 'f'),
-                      ('f', 't')] + list(
-        zip(vacuum_world.DIRTY_VALUES,
-            vacuum_world.CLEAN_VALUES))
-    dirt_status_list = [{'A': False, 'B': False},
-                        {'A': True, 'B': False},
-                        {'A': False, 'B': True}] + \
-                       [{'A': True, 'B': False}] * len(
-                           vacuum_world.DIRTY_VALUES)
-
-    for dirt_args, dirt_status in zip(dirt_args_list, dirt_status_list):
-        environment = Mock()
-        evaluator = Mock()
-        environment.locations = ['A', 'B']
-        argv = ['vacuum_world.py', '--dirt-status'] + list(dirt_args)
-        monkeypatch.setattr('vacuum_world.CleanFloorEvaluator', evaluator)
-        monkeypatch.setattr('vacuum_world.BasicVacuumWorld', environment)
-        monkeypatch.setattr('sys.argv', argv)
-
-        vacuum_world.main()
-
-        assert environment.call_args[0][1] == dirt_status
-
-
-def test_main_has_default_dirt_status(monkeypatch, logger):
+def test_main_accepts_with_empty_env_args(monkeypatch):
+    argv = ['vacuum_world.py', '--env-arg']
     environment = Mock()
     evaluator = Mock()
-    environment.locations = ['A', 'B']
-
     monkeypatch.setattr('vacuum_world.CleanFloorEvaluator', evaluator)
     monkeypatch.setattr('vacuum_world.BasicVacuumWorld', environment)
-    monkeypatch.setattr('sys.argv', ['vacuum_world.py'])
+    monkeypatch.setattr('sys.argv', argv)
 
     vacuum_world.main()
 
-    assert environment.call_args[0][1] == {'A': True, 'B': True}
+    assert environment.call_args[1] == {'arg': []}
 
 
-def test_main_sets_agent_location(monkeypatch, logger):
-    locations = ['A', 'B']
+def test_main_accepts_with_multiple_env_args(monkeypatch):
+    argv = ['vacuum_world.py', '--env-a', 'a-val', '--env-b', 'b-val']
     environment = Mock()
     evaluator = Mock()
-    environment.locations = locations
+    monkeypatch.setattr('vacuum_world.CleanFloorEvaluator', evaluator)
+    monkeypatch.setattr('vacuum_world.BasicVacuumWorld', environment)
+    monkeypatch.setattr('sys.argv', argv)
 
-    for location in locations:
-        argv = ['vacuum_world.py', '--agent-location', location]
+    vacuum_world.main()
 
-        monkeypatch.setattr('vacuum_world.CleanFloorEvaluator', evaluator)
-        monkeypatch.setattr('vacuum_world.BasicVacuumWorld', environment)
-        monkeypatch.setattr('sys.argv', argv)
-
-        vacuum_world.main()
-        assert environment.call_args[0][0] == location
+    assert environment.call_args[1] == {'a': ['a-val'], 'b': ['b-val']}
 
 
-def test_main_catches_invalid_agent_location(monkeypatch, logger):
-    locations = ['A', 'B']
+def test_main_rejects_non_env_custom_arg(monkeypatch):
+    argv = ['vacuum_world.py', 'foobar']
     environment = Mock()
     evaluator = Mock()
-    environment.locations = locations
-
-    argv = ['vacuum_world.py', '--agent-location', 'C']
-
     monkeypatch.setattr('vacuum_world.CleanFloorEvaluator', evaluator)
     monkeypatch.setattr('vacuum_world.BasicVacuumWorld', environment)
     monkeypatch.setattr('sys.argv', argv)
 
     with pytest.raises(SystemExit):
         vacuum_world.main()
+
+    assert not environment.called
+
+
+def test_main_handles_bad_env_args(monkeypatch, logger):
+    argv = ['vacuum_world.py', '--env-a', 'a-val']
+    environment = Mock()
+    run_experiment = Mock()
+    environment.side_effect = ValueError(['a-val'])
+    monkeypatch.setattr('vacuum_world.BasicVacuumWorld', environment)
+    monkeypatch.setattr('vacuum_world.run_experiment', run_experiment)
+    monkeypatch.setattr('sys.argv', argv)
+
+    vacuum_world.main()
+
+    messages = [call[0][0] for call in logger.error.call_args_list]
+    assert vacuum_world.MSG_ENVIRONMENT_INIT_ERROR.format(repr(['a-val'])) in messages
+    assert not run_experiment.called
 
 
 def test_main_loads_agent(monkeypatch, logger):
@@ -280,7 +281,31 @@ def test_main_loads_agent(monkeypatch, logger):
             vacuum_world.main()
 
             assert run_experiment.call_args[0][1] == \
-                   my_agent_class.return_value
+                my_agent_class.return_value
+        finally:
+            del sys.modules[module_name]
+
+
+def test_main_loads_environment(monkeypatch, logger):
+    module_names = ['my_package', 'foo.bar']
+    for module_name in module_names:
+        module = Mock()
+        my_environment_class = Mock()
+        run_experiment = Mock()
+        module.getattr.return_value = my_environment_class
+        argv = ['vacuum_world.py',
+                '--environment',
+                '{}.MyEnvironment'.format(module_name)]
+        monkeypatch.setattr('sys.argv', argv)
+        monkeypatch.setattr('vacuum_world.run_experiment', run_experiment)
+        sys.modules[module_name] = module
+
+        try:
+            setattr(module, 'MyEnvironment', my_environment_class)
+            vacuum_world.main()
+
+            assert run_experiment.call_args[0][0] == \
+                my_environment_class.return_value
         finally:
             del sys.modules[module_name]
 
@@ -341,15 +366,31 @@ def test_load_nonexistent_agent_module(monkeypatch, logger):
     assert error_message in messages
 
 
-def test_main_catches_experiment_exceptions(monkeypatch, default_args, logger):
+def test_main_catches_agent_exceptions(monkeypatch, default_args, logger):
     error = ValueError('blah')
     run_experiment = Mock()
-    run_experiment.side_effect = vacuum_world.AgentError(error)
+    run_experiment.side_effect = vacuum_world.ExperimentError('agent', error)
     monkeypatch.setattr('vacuum_world.run_experiment', run_experiment)
 
     vacuum_world.main()
 
-    error_message = vacuum_world.MSG_AGENT_ERROR.format(repr(error))
+    error_message = vacuum_world.MSG_EXPERIMENT_ERROR.format('agent',
+                                                             repr(error))
+    messages = [call[0][0] for call in logger.error.call_args_list]
+    assert error_message in messages
+
+
+def test_main_catches_environment_exceptions(monkeypatch, default_args, logger):
+    error = ValueError('blergh')
+    run_experiment = Mock()
+    run_experiment.side_effect = vacuum_world.ExperimentError('environment',
+                                                              error)
+    monkeypatch.setattr('vacuum_world.run_experiment', run_experiment)
+
+    vacuum_world.main()
+
+    error_message = vacuum_world.MSG_EXPERIMENT_ERROR.format('environment',
+                                                             repr(error))
     messages = [call[0][0] for call in logger.error.call_args_list]
     assert error_message in messages
 
