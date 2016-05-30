@@ -328,9 +328,10 @@ def test_load_nonexistent_agent(monkeypatch, logger):
     sys.modules['my_package'] = my_package
 
     try:
-        vacuum_world.main()
+        with pytest.raises(SystemExit):
+            vacuum_world.main()
 
-        error_message = vacuum_world.MSG_AGENT_NOT_FOUND.format("my_package.FooBar")
+        error_message = vacuum_world.MSG_CLASS_NOT_FOUND.format("agent", "my_package.FooBar")
         messages = [call[0][0] for call in logger.error.call_args_list]
         assert not run_experiment.called
         assert error_message in messages
@@ -344,9 +345,10 @@ def test_load_nonexistent_agent_from_same_module(monkeypatch, logger):
     monkeypatch.setattr('sys.argv', argv)
     monkeypatch.setattr('vacuum_world.run_experiment', run_experiment)
 
-    vacuum_world.main()
+    with pytest.raises(SystemExit):
+        vacuum_world.main()
 
-    error_message = vacuum_world.MSG_AGENT_NOT_FOUND.format("FooBar")
+    error_message = vacuum_world.MSG_CLASS_NOT_FOUND.format("agent", "FooBar")
     messages = [call[0][0] for call in logger.error.call_args_list]
     assert not run_experiment.called
     assert error_message in messages
@@ -358,7 +360,8 @@ def test_load_nonexistent_agent_module(monkeypatch, logger):
     monkeypatch.setattr('sys.argv', argv)
     monkeypatch.setattr('vacuum_world.run_experiment', run_experiment)
 
-    vacuum_world.main()
+    with pytest.raises(SystemExit):
+        vacuum_world.main()
 
     error_message = vacuum_world.MSG_MODULE_NOT_LOADED.format("foo")
     messages = [call[0][0] for call in logger.error.call_args_list]
