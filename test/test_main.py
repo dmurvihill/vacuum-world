@@ -38,42 +38,6 @@ def test_run_experiment_loops_1000_times(monkeypatch):
     assert logger.info.call_count == 1000
 
 
-def test_run_experiment_handles_agent_exceptions(logger):
-    agent = Mock()
-    agent.decide.side_effect = Exception
-
-    with pytest.raises(vacuum_world.ExperimentError) as e:
-        vacuum_world.run_experiment(Mock(), agent, Mock())
-        assert e.component == 'agent'
-
-
-def test_run_experiment_handles_bad_inputs_to_environment(logger):
-    environment = Mock()
-    environment.update.side_effect = ValueError
-
-    with pytest.raises(vacuum_world.ExperimentError) as e:
-        vacuum_world.run_experiment(environment, Mock(), Mock())
-        assert e.component == 'agent'
-
-
-def test_run_experiment_handles_environment_exceptions(logger):
-    environment = Mock()
-    environment.update.side_effect = Exception
-
-    with pytest.raises(vacuum_world.ExperimentError) as e:
-        vacuum_world.run_experiment(environment, Mock(), Mock())
-        assert e.component == 'environment'
-
-
-def test_run_experiment_handles_bad_inputs_to_agent(logger):
-    agent = Mock()
-    agent.decide.side_effect = ValueError
-
-    with pytest.raises(vacuum_world.ExperimentError) as e:
-        vacuum_world.run_experiment(Mock(), agent, Mock())
-        assert e.component == 'environment'
-
-
 def test_agent_affects_and_perceives_environment():
     agent = Mock()
     environment = Mock()
@@ -366,35 +330,6 @@ def test_load_nonexistent_agent_module(monkeypatch, logger):
     error_message = vacuum_world.MSG_MODULE_NOT_LOADED.format("foo")
     messages = [call[0][0] for call in logger.error.call_args_list]
     assert not run_experiment.called
-    assert error_message in messages
-
-
-def test_main_catches_agent_exceptions(monkeypatch, default_args, logger):
-    error = ValueError('blah')
-    run_experiment = Mock()
-    run_experiment.side_effect = vacuum_world.ExperimentError('agent', error)
-    monkeypatch.setattr('vacuum_world.run_experiment', run_experiment)
-
-    vacuum_world.main()
-
-    error_message = vacuum_world.MSG_EXPERIMENT_ERROR.format('agent',
-                                                             repr(error))
-    messages = [call[0][0] for call in logger.error.call_args_list]
-    assert error_message in messages
-
-
-def test_main_catches_environment_exceptions(monkeypatch, default_args, logger):
-    error = ValueError('blergh')
-    run_experiment = Mock()
-    run_experiment.side_effect = vacuum_world.ExperimentError('environment',
-                                                              error)
-    monkeypatch.setattr('vacuum_world.run_experiment', run_experiment)
-
-    vacuum_world.main()
-
-    error_message = vacuum_world.MSG_EXPERIMENT_ERROR.format('environment',
-                                                             repr(error))
-    messages = [call[0][0] for call in logger.error.call_args_list]
     assert error_message in messages
 
 

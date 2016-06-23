@@ -16,7 +16,6 @@ MSG_DESCRIPTION_ENVIRONMENT = "Import path and class name for the environment"
 MSG_DESCRIPTION_EVALUATOR = "Import path and class name for the evaluator"
 MSG_DESCRIPTION_PROGRAM = "Agent evaluator and environment simulator for " \
                           "the vacuum world described in AIMA, page 38."
-MSG_EXPERIMENT_ERROR = "Error in {}: {}"
 MSG_ENVIRONMENT_INIT_ERROR = "Bad environment parameter: {}"
 MSG_CLASS_NOT_FOUND = "Could not load {} \'{}\'"
 MSG_HELLO = "Vacuum World Simulator v1.0"
@@ -26,12 +25,6 @@ MSG_UNRECOGNIZED_ARG = "Unrecognized argument: {}"
 
 DIRTY_VALUES = ('y', 'yes', 't', 'true', 'dirty')
 CLEAN_VALUES = ('n', 'no', 'f', 'false', 'clean')
-
-
-class ExperimentError(Exception):
-    def __init__(self, component, cause):
-        self.component = component
-        self.cause = cause
 
 
 def run_experiment(environment, agent, evaluator):
@@ -49,22 +42,9 @@ def run_experiment(environment, agent, evaluator):
     logger.setLevel(LOG_LEVEL)
 
     for t in range(1, 1001):
-        try:
-            decision = agent.decide(environment.observable_state)
-        # We assume that ValueError means the environment's input failed the
-        # agent's validation. We further assume that the agent's validation is
-        # correct and the environment's input was truly illegal.
-        except ValueError as e:
-            raise ExperimentError('environment', e)
-        except Exception as e:
-            raise ExperimentError('agent', e)
+        decision = agent.decide(environment.observable_state)
         logger.info(MSG_AGENT_DECISION.format(t, repr(decision)))
-        try:
-            environment.update(decision)
-        except ValueError as e:
-            raise ExperimentError('agent', e)
-        except Exception as e:
-            raise ExperimentError('environment', e)
+        environment.update(decision)
         evaluator.update(environment.state)
 
 
@@ -238,14 +218,11 @@ def main():
         return 1
 
     # Do the thing
-    try:
-        run_experiment(environment,
-                       agent,
-                       evaluator)
+    run_experiment(environment,
+                   agent,
+                   evaluator)
 
-        logger.info(MSG_COMPLETE)
-    except ExperimentError as e:
-        logger.error(MSG_EXPERIMENT_ERROR.format(e.component, repr(e.cause)))
+    logger.info(MSG_COMPLETE)
 
     # Report results
     score = evaluator.score
