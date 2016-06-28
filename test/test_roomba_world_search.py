@@ -14,6 +14,7 @@ def is_legal_state(request):
 
 
 class TestIsGoal(object):
+
     def test_returns_false_when_some_locations_are_unvisited(self,
                                                              is_legal_state):
         agent_state = AgentState(visited_locations={(0, 0)},
@@ -29,6 +30,7 @@ class TestIsGoal(object):
 
 
 class TestInitialState(object):
+
     def test_sets_agent_location_directly(self, is_legal_state):
         for agent_location in {(0, 0), (0, 1)}:
             state = initial_state(all_locations={(0, 0), (0, 1)},
@@ -63,6 +65,7 @@ class TestInitialState(object):
 
 
 class TestPathCost(object):
+
     def test_returns_1_for_legal_action(self):
         for action in {'RIGHT', 'LEFT'}:
             with patch('roomba_world_search.legal_actions') as legal_actions:
@@ -83,6 +86,7 @@ class TestPathCost(object):
 
 
 class TestLegalActions(object):
+
     def test_returns_direction_based_on_relative_agent_location(self):
         agent_locations = ((0, 1), (2, 1), (1, 0), (1, 2), (0, 2), (2, 0))
         target_locations = ((1, 1), (1, 1), (1, 1), (1, 1), (1, 2), (2, 1))
@@ -113,6 +117,7 @@ class TestLegalActions(object):
 
 
 class TestNextState(object):
+
     @pytest.fixture
     def starting_states(self):
         all_locations = {(i, j) for i in range(4) for j in range(4)}
@@ -174,6 +179,7 @@ class TestNextState(object):
 
 
 class TestIsLegalAgentState(object):
+
     def test_fails_when_agent_is_outside_world(self):
         state = AgentState(visited_locations={(0, 0)},
                            all_locations={(0, 0)},
