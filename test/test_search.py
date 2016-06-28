@@ -42,9 +42,9 @@ class TestGraphSearch(object):
         assert graph_search(problem, Queue) is None
 
     def test_expands_according_to_frontier_strategy(self):
-        edges = (ProblemEdge('start', 'action1', 'not_goal'),
-                 ProblemEdge('not_goal', 'action3', 'goal'),
-                 ProblemEdge('start', 'action2', 'goal'))
+        edges = (ProblemEdge('start', 'action2', 'goal'),
+                 ProblemEdge('start', 'action1', 'not_goal'),
+                 ProblemEdge('not_goal', 'action3', 'goal'))
         problem = basic_problem('start', ('goal',), edges)
         assert graph_search(problem, LifoQueue) == ('action1', 'action3')
 
