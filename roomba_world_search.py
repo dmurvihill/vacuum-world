@@ -1,4 +1,5 @@
 from collections import namedtuple
+import search
 
 AgentState = namedtuple('AgentState',
                         ['visited_locations',
@@ -76,3 +77,6 @@ def is_legal_agent_state(agent_state):
         is_valid = True
         message = ''
     return is_valid, message
+
+problem = search.Problem(initial_state, is_goal, path_cost,
+                         legal_actions, next_state)
