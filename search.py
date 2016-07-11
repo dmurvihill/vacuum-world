@@ -1,5 +1,5 @@
+import queue
 from collections import namedtuple
-from queue import Queue
 
 
 Problem = namedtuple('Problem', ['initial_state', 'is_goal', 'path_cost',
@@ -39,6 +39,18 @@ def _expand_path(path_node):
     return path
 
 
+def _total_path_cost(problem, path_node):
+    if path_node.parent_node is None:
+        total_cost = 0
+    else:
+        parent_node = path_node.parent_node
+        parent_cost = _total_path_cost(problem, path_node.parent_node)
+        incremental_cost = problem.path_cost(parent_node.state,
+                                             path_node.parent_action)
+        total_cost = parent_cost + incremental_cost
+    return total_cost
+
+
 def first(test, lst):
     if len(lst) == 0:
         result = None
@@ -47,3 +59,19 @@ def first(test, lst):
     else:
         result = first(test, lst[1:])
     return result
+
+
+class AStarQueue(queue.PriorityQueue):
+
+    def __init__(self, problem, heuristic):
+        self._problem = problem
+        self._heuristic = heuristic
+        queue.PriorityQueue.__init__(self)
+
+    def put(self, node, **kwargs):
+        total_path_cost = _total_path_cost(self._problem, node)
+        evaluation = total_path_cost + self._heuristic(node)
+        queue.PriorityQueue.put(self, (evaluation, node), **kwargs)
+
+    def get(self, **kwargs):
+        return queue.PriorityQueue.get(self, **kwargs)[1]

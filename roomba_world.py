@@ -22,27 +22,6 @@ class RoombaWorld(object):
                                                      'is_dirty'])
     Point = namedtuple('Point', ['x', 'y'])
 
-    @staticmethod
-    def _read_floor_status(floor_state_file):
-        x = 0
-        y = 0
-        floor_status = {}
-        for line in floor_state_file.readlines():
-            for char in line.rstrip():
-                if char == '.':
-                    location = Location(is_dirty=False)
-                elif char == '+':
-                    location = Location(is_dirty=True)
-                elif char == 'x':
-                    location = Obstacle()
-                else:
-                    raise ValueError(MSG_ILLEGAL_FLOOR_STATE_CHR.format(char))
-                floor_status[(x, y)] = location
-                y += 1
-            x += 1
-            y = 0
-        return floor_status
-
     def __init__(self, agent_location, floor_state_path):
         if len(floor_state_path) != 1:
             raise ValueError(MSG_WRONG_ARGV_LEN.format(1,
@@ -87,7 +66,7 @@ class RoombaWorld(object):
     def _initialize_floor_state(self, floor_state_path):
         floor_state_file = open(floor_state_path[0], 'r')
         try:
-            floor_status = RoombaWorld._read_floor_status(floor_state_file)
+            floor_status = _read_floor_status(floor_state_file)
         finally:
             floor_state_file.close()
         return floor_status
@@ -191,3 +170,28 @@ class RandomReflexAgent(object):
             return 'SUCK'
         else:
             return RandomReflexAgent.action[random.randint(0, 3)]
+
+
+def _read_floor_status(floor_state_file):
+    x = 0
+    y = 0
+    floor_status = {}
+    for line in floor_state_file.readlines():
+        for char in line.rstrip():
+            if char == '.':
+                location = Location(is_dirty=False)
+            elif char == '+':
+                location = Location(is_dirty=True)
+            elif char == 'x':
+                location = Obstacle()
+            else:
+                raise ValueError(MSG_ILLEGAL_FLOOR_STATE_CHR.format(char))
+            floor_status[(x, y)] = location
+            y += 1
+        x += 1
+        y = 0
+    return floor_status
+
+
+def read_floor_geography(floor_state_file):
+    return {(l.x, l.y) for l in _read_floor_status(floor_state_file)}

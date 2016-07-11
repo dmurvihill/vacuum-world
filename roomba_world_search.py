@@ -1,5 +1,9 @@
 from collections import namedtuple
+from functools import partial
+
+import roomba_world
 import search
+from problem_solving_agent import ClassicalProblemSolvingAgent
 
 AgentState = namedtuple('AgentState',
                         ['visited_locations',
@@ -78,5 +82,28 @@ def is_legal_agent_state(agent_state):
         message = ''
     return is_valid, message
 
-problem = search.Problem(initial_state, is_goal, path_cost,
-                         legal_actions, next_state)
+
+def problem(all_locations, agent_location):
+    init = partial(initial_state, all_locations, agent_location)
+    return search.Problem(init, is_goal, path_cost, legal_actions, next_state)
+
+
+class RoombaWorldSearchAgent(ClassicalProblemSolvingAgent):
+
+    def __init__(self, floor_geography_path, agent_location):
+        fd = open(floor_geography_path, 'r')
+        all_locations = roomba_world.read_floor_geography(fd)
+        prob = problem(all_locations, agent_location)
+        heuristic = mean_squared_distance_to_uncleared_nodes
+        frontier_strategy = search.AStarQueue(prob, heuristic)
+        solver = search.graph_search(prob, frontier_strategy)
+        ClassicalProblemSolvingAgent.__init__(self, solver, 'SUCK', 'SUCK')
+
+
+def mean_squared_distance_to_uncleared_nodes(state):
+    unvisited_locations = state.all_locations - state.visited_locations
+    agent_location = state.agent_location
+    squared_distances = [(l[0] - agent_location[0] ** 2) +
+                         (l[1] - agent_location[1] ** 2)
+                         for l in unvisited_locations]
+    return sum(squared_distances) / len(squared_distances)
